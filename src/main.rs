@@ -26,14 +26,7 @@ fn main() {
 
     let cli_tool = &args[1];
 
-    if is_completion_call(&args) {
-        let status = Command::new(cli_tool)
-            .args(&args[2..]) // Skip "kcwrap-rust" and "kubectl"
-            .status()
-            .expect("Failed to execute command");
-
-        process::exit(status.code().unwrap_or(1));
-    }
+    pass_through_completion_call(&cli_tool, &args);
 
     let config: Config = init_config_from_env();
 
@@ -44,6 +37,8 @@ fn main() {
         );
         process::exit(1);
     }
+
+    force_skip_confirmation_if_requested(&cli_tool, &args);
 
     let context_cmd = Command::new("kubectl")
         .arg("config")
@@ -152,18 +147,44 @@ fn get_color(current_context: &str, config: &Config) -> ColorSpec {
     color
 }
 
-fn is_completion_call(args: &[String]) -> bool {
+fn force_skip_confirmation_if_requested(cli_tool: &str, args: &[String]) {
+    if args.len() < 3 {
+        return;
+    }
+
+    let should_skip = args[2] == "kcw_no_wrap";
+
+    if should_skip {
+        let status = Command::new(cli_tool)
+        .args(&args[3..]) // Skip "kcwrap", "kubectl", and "kcw_no_wrap"
+        .status()
+        .expect("Failed to execute command");
+
+        process::exit(status.code().unwrap_or(1));
+    }
+}
+
+fn pass_through_completion_call(cli_tool: &str, args: &[String]) {
     if args.len() < 2 || !SUPPORTED_COMMANDS.contains(&args[1].as_str()) {
-        return false;
+        return;
     }
 
     // Check internal completion arguments
     let command_args = &args[2..];
 
     // kubectl uses __complete for shell completion
-    command_args
+    let is_completion_call = command_args
         .iter()
-        .any(|arg| arg.contains("__complete") || arg.contains("completion"))
+        .any(|arg| arg.contains("__complete") || arg.contains("completion"));
+
+    if is_completion_call {
+        let status = Command::new(cli_tool)
+            .args(&args[2..]) // Skip "kcwrap-rust" and "kubectl"
+            .status()
+            .expect("Failed to execute command");
+
+        process::exit(status.code().unwrap_or(1));
+    }
 }
 
 fn contains_list_item(str: &str, strings: &[String]) -> bool {
