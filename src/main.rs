@@ -26,10 +26,6 @@ fn main() {
 
     let cli_tool = &args[1];
 
-    pass_through_completion_call(&cli_tool, &args);
-
-    let config: Config = init_config_from_env();
-
     if !SUPPORTED_COMMANDS.contains(&cli_tool.as_str()) {
         println!(
             "Unsupported tool: {cli_tool}. Please use {:?}",
@@ -38,7 +34,11 @@ fn main() {
         process::exit(1);
     }
 
+    pass_through_completion_call(&cli_tool, &args);
+
     force_skip_confirmation_if_requested(&cli_tool, &args);
+
+    let config: Config = init_config_from_env();
 
     let context_cmd = Command::new("kubectl")
         .arg("config")
@@ -63,8 +63,7 @@ fn main() {
     let should_prompt: bool = should_prompt(&session_state, &current_context);
 
     if !should_prompt {
-        run_command(cli_tool);
-        process::exit(0);
+        run_command_and_exit(cli_tool, &args);
     }
 
     let should_execute: bool = prompt_if_should_execute(cli_tool);
@@ -75,7 +74,7 @@ fn main() {
             current_context.to_string(),
             current_session,
         );
-        run_command(cli_tool);
+        run_command_and_exit(cli_tool, &args);
     } else {
         println!("Command aborted");
         process::exit(0);
@@ -108,16 +107,13 @@ fn prompt_if_should_execute(cli_tool: &str) -> bool {
     answer == "y" || answer == "yes"
 }
 
-fn run_command(cli_tool: &str) {
-    let args: Vec<String> = args().collect();
+fn run_command_and_exit(cli_tool: &str, args: &[String]) {
     let status = Command::new(cli_tool)
         .args(&args[2..])
         .status()
         .expect("Failed to execute command {cli_tool}");
 
-    if !status.success() {
-        process::exit(status.code().unwrap_or(1))
-    }
+    process::exit(status.code().unwrap_or(1))
 }
 
 fn should_prompt(session_state: &SessionState, current_context: &str) -> bool {
@@ -165,10 +161,6 @@ fn force_skip_confirmation_if_requested(cli_tool: &str, args: &[String]) {
 }
 
 fn pass_through_completion_call(cli_tool: &str, args: &[String]) {
-    if args.len() < 2 || !SUPPORTED_COMMANDS.contains(&args[1].as_str()) {
-        return;
-    }
-
     // Check internal completion arguments
     let command_args = &args[2..];
 
@@ -178,12 +170,7 @@ fn pass_through_completion_call(cli_tool: &str, args: &[String]) {
         .any(|arg| arg.contains("__complete") || arg.contains("completion"));
 
     if is_completion_call {
-        let status = Command::new(cli_tool)
-            .args(&args[2..]) // Skip "kcwrap-rust" and "kubectl"
-            .status()
-            .expect("Failed to execute command");
-
-        process::exit(status.code().unwrap_or(1));
+        run_command_and_exit(cli_tool, args);
     }
 }
 
