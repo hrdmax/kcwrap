@@ -3,9 +3,9 @@ use kcwrap::*;
 use std::{
     env::args,
     io::{self, Write},
-    os::unix::process::parent_id,
     process::{self, Command, Output},
 };
+use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
 use chrono::{Duration, Utc};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
@@ -55,8 +55,8 @@ fn main() {
 
     let current_context = output;
 
-    let current_session = parent_id();
-    let mut session_state: SessionState = load_sessions_state(current_session);
+    let parent_pid = get_parent_pid();
+    let mut session_state: SessionState = load_sessions_state(parent_pid);
 
     print_context(&current_context, &config).expect("Failed to print context to stdout");
 
@@ -69,16 +69,22 @@ fn main() {
     let should_execute: bool = prompt_if_should_execute(cli_tool);
 
     if should_execute {
-        update_session(
-            &mut session_state,
-            current_context.to_string(),
-            current_session,
-        );
+        update_session(&mut session_state, current_context.to_string(), parent_pid);
         run_command_and_exit(cli_tool, &args);
     } else {
         println!("Command aborted");
         process::exit(0);
     }
+}
+
+fn get_parent_pid() -> u32 {
+    let r = RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing());
+    let s =
+        System::new_with_specifics(r);
+    s.process(sysinfo::get_current_pid().unwrap())
+        .and_then(|p| p.parent())
+        .expect("Failed to get parent process ID")
+        .as_u32()
 }
 
 fn get_output_from_command(output: Output) -> (bool, String) {
@@ -152,9 +158,9 @@ fn force_skip_confirmation_if_requested(cli_tool: &str, args: &[String]) {
 
     if should_skip {
         let status = Command::new(cli_tool)
-        .args(&args[3..]) // Skip "kcwrap", "kubectl", and "kcw_no_wrap"
-        .status()
-        .expect("Failed to execute command");
+            .args(&args[3..]) // Skip "kcwrap", "kubectl", and "kcw_no_wrap"
+            .status()
+            .expect("Failed to execute command");
 
         process::exit(status.code().unwrap_or(1));
     }

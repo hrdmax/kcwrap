@@ -31,10 +31,10 @@ pub fn load_sessions_state(pid: u32) -> SessionState {
     session
 }
 
-pub fn update_session(session: &mut SessionState, current_context: String, current_session: u32) {
+pub fn update_session(session: &mut SessionState, current_context: String, parent_pid: u32) {
     session.last_confirmed_date_time = Utc::now();
     session.confirmed_contexts.insert(current_context, true);
-    save_session_state(current_session, session);
+    save_session_state(parent_pid, session);
 }
 
 fn save_session_state(pid: u32, session: &SessionState) {
