@@ -116,7 +116,7 @@ dependencies = [
 
 [[package]]
 name = "kcwrap"
-version = "0.2.2"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "colored",
